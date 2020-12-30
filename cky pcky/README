@@ -1,0 +1,14 @@
+
+1. Execute the Program:
+  
+
+   python3 cky.py pcfg.txt sentences.txt : Prints the output on console
+   python3 cky.py pcfg.txt sentences.txt > sentences.txt.cky: Prints the output in file
+   python3 cky.py pcfg.txt sentences.txt -prob : Prints the output on console (Invokes pcky)
+   python3 cky.py pcfg.txt sentences.txt -prob > sentences.txt.cky: Prints the output in file (Invokes pcky)
+
+
+2. cade machine: lab1-26.eng.utah.edu
+
+
+   
