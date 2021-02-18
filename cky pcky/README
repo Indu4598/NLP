@@ -1,14 +1,45 @@
+Build a syntatic parser from scartch using CKY Parsing algorithm. 
 
-1. Execute the Program:
-  
+What is CKY?
+Cocke-Younger-Kasami Algorithm (CYK or CKY) is parsing algorithm for context-free grammars. The standard version of CKY operates only on
+context-free grammar given in Chomsky Normal form (CNF). It employs buttom-up parsing and Dynamic Programming.
 
-   python3 cky.py pcfg.txt sentences.txt : Prints the output on console
-   python3 cky.py pcfg.txt sentences.txt > sentences.txt.cky: Prints the output in file
-   python3 cky.py pcfg.txt sentences.txt -prob : Prints the output on console (Invokes pcky)
-   python3 cky.py pcfg.txt sentences.txt -prob > sentences.txt.cky: Prints the output in file (Invokes pcky)
-
-
-2. cade machine: lab1-26.eng.utah.edu
+What is PCKY?
+Allows to recover the most probable parse given the probablities of the production.
 
 
-   
+Program Execution: 
+  1. python cky.py pcfg.txt sentences.txt -> To execute CKY algorithm.
+  2. python cky.py pcfg.txt sentences.txt -prob -> To execute PCKY algorithm.
+pcfg.txt or PCFG contains the probabilistic context-free grammar rules in CNF form.
+Example of the grmmar file:
+S ->NP VP .80
+S ->VP NP .20
+NP ->I .37
+NP ->fish .128
+NP ->trust .172
+NP ->shrinks .33
+VP ->fish .4
+VP ->shrinks .3025
+VP ->trust .2975
+
+
+The sentences file contains the sentences that should be parsed.Each sentence will be on separate line.
+I fish
+
+Output (CKY):
+PARSING SENTENCE: I fish
+NUMBER OF PARSES FOUND: 1
+TABLE:
+cell[1,1]: NP
+cell[1,2]: S
+cell[2,2]: NP VP
+
+
+Output (PCKY):
+PARSING SENTENCE: I fish
+NUMBER OF PARSES FOUND: 1
+TABLE:
+cell[1,1]: NP(0.3700)
+cell[1,2]: S (0.1184)
+cell[2,2]: NP(0.1280) VP(0.4000)
