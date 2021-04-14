@@ -101,7 +101,6 @@ def cky(s):
     res = [[[] for x in range(n_words)] for y in range(n_words)]
 
     for i in range(n_words):
-        # print("i-loop",i)
         res[i][i] = get_NT(words[i])
         for j in range(i-1,-1,-1):
             for k in range(j+1,i+1):
