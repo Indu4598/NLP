@@ -1,7 +1,0 @@
-Number of Training Sentences = 30
-Number of Test Sentences = 3
-Number of Gold Senses = 4
-Vocabulary Size = 9
-SERVE10(0.0) SERVE12(0.0) SERVE2(0.0) SERVE6(0.0) 
-SERVE2(0.89) SERVE12(0.38) SERVE10(0.0) SERVE6(0.0) 
-SERVE2(0.38) SERVE10(0.0) SERVE12(0.0) SERVE6(0.0) 
