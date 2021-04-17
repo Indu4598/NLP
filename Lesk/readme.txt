@@ -13,6 +13,6 @@ For example,if the target word is “line”, you may find both “line”and“
 occurrencesof “line”. 
 For example, the test sentences file for the target word “line” might look likethis: 
 
-** Just say the <occurrence>lines</> flat without those curlicues .
+**Just say the <occurrence>lines</> flat without those curlicues .
 Canadians use the North American " qwerty " keyboard , named for the sequence of keys on the top <occurrence>line</> of letters .
-In  Houston ,  <occurrence>lines</>  of familieswrapped  around  the  shopping  mall  that houses the legalization center . **
+In  Houston ,  <occurrence>lines</>  of familieswrapped  around  the  shopping  mall  that houses the legalization center.**
