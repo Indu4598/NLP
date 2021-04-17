@@ -48,9 +48,9 @@ The Test Sentences file will have exactly the same format as in PART 1. The Trai
 **Stopwords File and k Parameter:**
 The Stopwords file will have the same format as in PART 1. The kparameter will beanon-negative integer representing the size of the context window to use around  the target  word occurrence. The  context  vector  should  be  constructed  from kwords immediately tothe left of the target word andkwords immediately to its right. Special case:if k=0, use the entire sentence as the context window for the target word.
 
-**Nearest Neighbor Matching Algorithm **
+**Nearest Neighbor Matching Algorithm**
 
-Training
+**Training**
 1.You should collect all of the distinct terms that appear in the training sentences filewithin the context window kof a target word occurrence. For example, if k=2 then collect all of the  words  that  appear  within  2  words  on  the  left side  and  2  words  on  the right  side  of  a target word occurrence. Words should be treated as case insensitive, so for example “dog” and “Dog” are considered to be the same term. You should then discard all terms that are stop words, have noalphabetical letters, or have a frequency count of 1. The remaining terms will beyour vocabulary (V). 
 
 2.You should collect all of the distinct gold senses in the training sentences file. This set will beyour sense inventory for the target word.
