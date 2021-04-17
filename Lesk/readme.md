@@ -66,10 +66,10 @@ Training
 
 **Output:Your programshouldproducean output file with the same name as the test sentences file but ending with the suffix “.distsim”** (e.g., test.txt.distsim). 
 The first four lines of the output file should print statistics about the input files as follows:
-**Number of Training Sentences = #
-Number of Test Sentences = #
-Number of Gold Senses = #
-Vocabulary Size = #**
+**Number of Training Sentences = # <br/>
+Number of Test Sentences = #<br/>
+Number of Gold Senses = # <br/>
+Vocabulary Size = #** <br/>
 
 
 Each subsequent line of the output file should be a ranked list of senses for a test instance, printed in order of decreasing cosine similarity scores,from left to right. Print each sense with its cosine score in parentheses, with exactly 2 significant digits after the decimal point using rounding. For example, the outputfor an instanceof the target word "line"mightlook likethis:
