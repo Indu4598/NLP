@@ -9,7 +9,7 @@ How to run?
 We tested our program on CADE machine lab1-10.
 We frequently ran out of disc space that was alloted to our individual machines and had to delete most of the stuff.
 
-a) For reference, following are the packages that are required.
+a) For reference, following are the packages that are required. <br/>
 pip install -U spacy <br/>
 pip install -U textblob <br/>
 pip install torch==1.7.0+cpu torchvision==0.8.1+cpu torchaudio==0.7.0 -f https://download.pytorch.org/whl/torch_stable.html <br/>
