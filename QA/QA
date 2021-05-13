@@ -1,0 +1,495 @@
+#!venv/bin/python
+import sys
+import os
+from textblob import TextBlob
+import torch
+import spacy
+import nltk
+from scipy import spatial
+import numpy as np
+from nltk import word_tokenize
+
+en_nlp = spacy.load('en')
+from nltk.stem.lancaster import LancasterStemmer
+
+st = LancasterStemmer()
+all_stopwords = en_nlp.Defaults.stop_words
+import string
+import constant
+
+dir_file_path = sys.argv[1]
+dir_file_pointer = open(dir_file_path, "r")
+
+dir_head = dir_file_pointer.readline()
+corpus_dir = dir_file_pointer.readlines()
+
+response_file_pointer = open(dir_head.strip("\n") + "response", "w")
+
+ques_classes = ['where', 'when', 'who', 'how many', 'what', 'What', 'how much', 'Where', 'When', 'Who', 'How many',
+                'How much', 'how big', 'How big', 'Whom', 'whom', 'how small', 'How small']
+
+
+# Matches roots of questions and all the sentences. Returns the score based on common roots.
+def root_match(questions, sentences):
+    li = []
+
+    main_root = {}
+    for i in range(len(questions)):
+        que_root = [0 for r in range(len(sentences))]
+        question_root = st.stem(str([sent.root for sent in en_nlp(questions[i]).sents][0]))
+
+        for j, s in enumerate(sentences):
+            doc = en_nlp(s)
+
+            for sent in doc.sents:
+
+                roots = [st.stem(chunk.root.head.text.lower()) for chunk in sent.noun_chunks]
+
+                if question_root in roots:
+                    common_root = [w for w in roots if w in question_root]
+                    que_root[j] = len(common_root)
+
+                    li.append(question_root)
+        main_root[i] = que_root
+
+    return main_root
+
+
+# Scoring the word match based on QUARC
+def word_match_quarc(question, sentences, root_match_score):
+    word_match_score_quarc = [0 for i in range(len(sentences))]
+    question_morph = find_morphological_root(question)
+    for index, sentence in enumerate(sentences):
+        sentence_morph = find_morphological_root(sentence)
+        sentence_root = [row[0] for row in sentence_morph]
+        for question_word in question_morph:
+            if question_word[0] in sentence_root:
+                if (question_word[2] == False):
+                    if (question_word[1] == 'VERB'):
+                        word_match_score_quarc[index] += 6
+                    elif (question_word[1] == 'PROPN'):
+                        word_match_score_quarc[index] += 1
+                    else:
+                        word_match_score_quarc[index] += 3
+
+        word_match_score_quarc[index] += root_match_score[index]
+
+    return word_match_score_quarc
+
+
+# Returns the type of question from the ques_classes list. Returns None if the question class is not found.
+def find_ques_class(s):
+    s = s.strip("\n")
+
+    for w in ques_classes:
+        if s.find(w) > -1:
+            return w
+    return None
+
+
+def find_morphological_root(sentence):
+    doc = en_nlp(sentence)
+    pos = [token.pos_ for token in doc]
+    lemmas = [token.lemma_ for token in doc]
+    stopword = [token.is_stop for token in doc]
+    return list(zip(lemmas, pos, stopword))
+
+
+# Returns the actual answer from the selected sentences based on question class and NER tags.
+def find_ner(qtype, answer):
+    if qtype != None:
+        qtype = qtype.lower()
+
+    ent_dict = {}
+    doc = en_nlp(answer)
+    for ent in doc.ents:
+
+        if ent.label_ in ent_dict:
+            ent_list = ent_dict.get(ent.label_)
+            ent_list.append(ent.text)
+            ent_dict[ent.label_] = ent_list
+        else:
+            new_list = []
+            new_list.append(ent.text)
+            ent_dict[ent.label_] = new_list
+
+    return_list = []
+    if qtype == 'who' or qtype == 'whom':
+        if 'PERSON' in ent_dict:
+            return_list.extend(ent_dict['PERSON'])
+
+    elif qtype == 'when':
+        if 'DATE' in ent_dict:
+            return_list.extend(ent_dict['DATE'])
+        if 'TIME' in ent_dict:
+            return_list.extend(ent_dict['TIME'])
+
+    elif qtype == 'where':
+        if 'LOC' in ent_dict:
+            return_list.extend(ent_dict['LOC'])
+        if 'GPE' in ent_dict:
+            return_list.extend(ent_dict['GPE'])
+        if 'ORG' in ent_dict:
+            return_list.extend(ent_dict['ORG'])
+
+    elif qtype == 'how much':
+        if 'CARDINAL' in ent_dict:
+            return_list.extend(ent_dict['CARDINAL'])
+        if 'QUANTITY' in ent_dict:
+            return_list.extend(ent_dict['QUANTITY'])
+        if 'MONEY' in ent_dict:
+            return_list.extend(ent_dict['MONEY'])
+
+    elif qtype == 'how many':
+        if 'CARDINAL' in ent_dict:
+            return_list.extend(ent_dict['CARDINAL'])
+        if 'QUANTITY' in ent_dict:
+            return_list.extend(ent_dict['QUANTITY'])
+
+    elif qtype == 'how big' or qtype == 'how small':
+        if 'CARDINAL' in ent_dict:
+            return_list.extend(ent_dict['CARDINAL'])
+        if 'QUANTITY' in ent_dict:
+            return_list.extend(ent_dict['QUANTITY'])
+
+    if len(return_list) == 0:
+        answer_tokens = word_tokenize(answer)
+        answer_without_sw = [word for word in answer_tokens if
+                             not word in all_stopwords and word not in string.punctuation]
+        qac = [w for w in answer_without_sw if w not in que_list[j]]
+
+        return qac
+    else:
+
+        return return_list
+
+
+# Scoring sentences based on the question class and sentence structure
+def question_rules_score(question, ques_class, sentences, root_and_word_match_score):
+    scores = [0 for i in range(len(sentences))]
+
+    if ques_class != None:
+        ques_class = ques_class.lower()
+
+    ner_tags_ques = {}
+
+    doc_que = en_nlp(question)
+
+    for ent in doc_que.ents:
+        if ent.label_ in ner_tags_ques:
+            ent_list = ner_tags_ques.get(ent.label_)
+            ent_list.append(ent.text)
+            ner_tags_ques[ent.label_] = ent_list
+        else:
+            new_list = []
+            new_list.append(ent.text)
+            ner_tags_ques[ent.label_] = new_list
+
+    if ques_class == 'who' or ques_class == 'whom':
+        for k in range(len(sentences)):
+            score = score_who(question, sentences[k], ner_tags_ques)
+            scores[k] = root_and_word_match_score[k] + score
+
+    elif ques_class == 'when':
+        for k in range(len(sentences)):
+            score = score_when(question, sentences[k], ner_tags_ques)
+            scores[k] = root_and_word_match_score[k] + score
+
+    elif ques_class == 'where':
+        for k in range(len(sentences)):
+            score = score_where(question, sentences[k], ner_tags_ques)
+            scores[k] = root_and_word_match_score[k] + score
+
+    elif ques_class == 'what':
+        for k in range(len(sentences)):
+            score = score_what(question, sentences[k], ner_tags_ques)
+            scores[k] = root_and_word_match_score[k] + score
+
+    elif ques_class == 'how big' or ques_class == 'how small':
+        for k in range(len(sentences)):
+            score = score_how_big(question, sentences[k], ner_tags_ques)
+            scores[k] = root_and_word_match_score[k] + score
+
+    elif ques_class == 'how much':
+        for k in range(len(sentences)):
+            score = score_how_much(question, sentences[k], ner_tags_ques)
+            scores[k] = root_and_word_match_score[k] + score
+
+    else:
+        for k in range(len(sentences)):
+            scores[k] = root_and_word_match_score[k]
+
+    max_score = scores.index(max(scores))
+    answer = sentences[max_score]
+
+    return answer
+
+
+# Scoring functions for different types of questions.
+def score_who(question, sentence, ner_tags_ques):
+    ent_dict = {}
+    score = 0
+    doc_sen = en_nlp(sentence)
+    for ent in doc_sen.ents:
+
+        if ent.label_ in ent_dict:
+            ent_list = ent_dict.get(ent.label_)
+            ent_list.append(ent.text)
+            ent_dict[ent.label_] = ent_list
+        else:
+            new_list = []
+            new_list.append(ent.text)
+            ent_dict[ent.label_] = new_list
+
+    sentence_morph = find_morphological_root(sentence)
+    sentence_root = [row[0] for row in sentence_morph]
+
+    if 'PERSON' not in ner_tags_ques:
+        if 'PERSON' in ent_dict:
+            score = score + constant.CONFIDENT
+        if 'name' in sentence_root:
+            score = score + constant.GOOD_CLUE
+
+    if 'PERSON' in ent_dict or 'name' in sentence_root:
+        score = score + constant.GOOD_CLUE
+
+    return score
+
+
+def score_how_big(question, sentence, ner_tags_ques):
+    ent_dict = {}
+    score = 0
+    doc_sen = en_nlp(sentence)
+    for ent in doc_sen.ents:
+        if ent.label_ in ent_dict:
+            ent_list = ent_dict.get(ent.label_)
+            ent_list.append(ent.text)
+            ent_dict[ent.label_] = ent_list
+        else:
+            new_list = []
+            new_list.append(ent.text)
+            ent_dict[ent.label_] = new_list
+
+    if 'QUANTITY' in ent_dict:
+        score = score + constant.SLAM_DUNK
+
+    if 'CARDINAL' in ent_dict:
+        score = score + constant.CLUE
+
+    return score
+
+
+def score_when(question, sentence, ner_tags_ques):
+    question = question.lower()
+    ent_dict = {}
+    score = 0
+    doc_sen = en_nlp(sentence)
+    for ent in doc_sen.ents:
+        if ent.label_ in ent_dict:
+            ent_list = ent_dict.get(ent.label_)
+            ent_list.append(ent.text)
+            ent_dict[ent.label_] = ent_list
+        else:
+            new_list = []
+            new_list.append(ent.text)
+            ent_dict[ent.label_] = new_list
+
+    sentence_morph = find_morphological_root(sentence)
+    sentence_root = [row[0] for row in sentence_morph]
+
+    question_morph = find_morphological_root(question)
+    question_root = [row[0] for row in question_morph]
+
+    if 'DATE' in ent_dict or 'TIME' in ent_dict:
+        score = score + constant.GOOD_CLUE
+
+    if 'last' in question_root and (
+            'first' in sentence_root or 'last' in sentence_root or 'since' in sentence_root or 'ago' in sentence_root):
+        score = score + constant.SLAM_DUNK
+
+    if ('begin' in question_root or 'start' in question_root) and (
+            'start' in sentence_root or 'begin' in sentence_root or 'since' in sentence_root or 'year' in sentence_root):
+        score = score + constant.SLAM_DUNK
+
+    return score
+
+
+def score_where(question, sentence, ner_tags_ques):
+    question = question.lower()
+    ent_dict = {}
+    score = 0
+    doc_sen = en_nlp(sentence)
+    # print([(X.text, X.label_) for X in doc_sen.ents])
+    sen_labels = [x.label_ for x in doc_sen.ents]
+
+
+    if 'in' in sentence or 'at' in sentence or 'by' in sentence or 'near' in sentence:
+        score = score + constant.GOOD_CLUE
+    if 'GPE' in sen_labels :
+        score = score + constant.CONFIDENT
+    return score
+
+
+def score_what(question, sentence, ner_tags_ques):
+    question = question.lower()
+    ent_dict = {}
+    score = 0
+    doc_sen = en_nlp(sentence)
+    for ent in doc_sen.ents:
+        if ent.label_ in ent_dict:
+            ent_list = ent_dict.get(ent.label_)
+            ent_list.append(ent.text)
+            ent_dict[ent.label_] = ent_list
+        else:
+            new_list = []
+            new_list.append(ent.text)
+            ent_dict[ent.label_] = new_list
+
+    sentence_morph = find_morphological_root(sentence)
+    sentence_root = [row[0] for row in sentence_morph]
+    question_morph = find_morphological_root(question)
+    question_root = [row[0] for row in question_morph]
+
+    if 'TIME' in ner_tags_ques or 'DATE' in ner_tags_ques:
+        if 'yesterday' in sentence_root or 'yesterday' in sentence_root or 'today' in sentence_root or 'tomorrow' in sentence_root or (
+                'last' in sentence_root and 'night' in sentence_root):
+            score = score + constant.CLUE
+
+    if 'kind' in question_root and ('call' in sentence_root or 'kind' in sentence_root):
+        score = score + constant.GOOD_CLUE
+
+    if 'name' in question_root and ('call' in sentence_root or 'name' in sentence_root or 'known' in sentence_root):
+        score = score + constant.SLAM_DUNK
+
+    if ('position' in question_root or 'rank' in question_root) and 'ORDINAL' in ent_dict:
+        score = score + constant.SLAM_DUNK
+
+    return score
+
+
+def score_how_much(question, sentence, ner_tags_ques):
+    question = question.lower()
+    ent_dict = {}
+    score = 0
+    doc_sen = en_nlp(sentence)
+    for ent in doc_sen.ents:
+        if ent.label_ in ent_dict:
+            ent_list = ent_dict.get(ent.label_)
+            ent_list.append(ent.text)
+            ent_dict[ent.label_] = ent_list
+        else:
+            new_list = []
+            new_list.append(ent.text)
+            ent_dict[ent.label_] = new_list
+
+    sentence_morph = find_morphological_root(sentence)
+    sentence_root = [row[0] for row in sentence_morph]
+
+    question_morph = find_morphological_root(question)
+    question_root = [row[0] for row in question_morph]
+
+    if 'cost' in question and 'MONEY' in ent_dict:
+        score = score + constant.SLAM_DUNK
+
+    if 'QUANTITY' in sentence_root:
+        score = score + constant.CONFIDENT
+
+    return score
+
+
+# Writing the final answer to response file.
+def write_to_file(response_file_pointer, qid, answer):
+    print(qid)
+    print("Answer: ",answer)
+    print()
+
+def score_date(ques):
+    score_date=0
+    if 'happen' in ques:
+        score_date+=constant.GOOD_CLUE
+    if 'take'  in ques and 'place' in ques:
+        score_date+=constant.GOOD_CLUE
+    if 'this' in ques:
+        score_date+=constant.SLAM_DUNK
+    if 'story' in ques:
+        score_date+=constant.SLAM_DUNK
+
+    return score_date
+
+# Parsing stories
+count = 0
+
+for i in corpus_dir:
+
+    story = ""
+
+    sentences = []
+
+    story_file_addr = dir_head.strip("\n") + i.strip("\n") + ".story"
+
+    story_file_pointer = open(story_file_addr, "r")
+
+    for f in story_file_pointer:
+        if f.split(':')[0] == "HEADLINE":
+            continue
+        if f.split(':')[0] == "DATE":
+            date_line = f.split(':')[1]
+        if f.split(':')[0] == "STORYID":
+            continue
+        if f.split(':')[0] == "TEXT":
+            continue
+        story = story + f
+
+    blob = TextBlob(story)
+    sentences = [item.raw for item in blob.sentences]
+
+    story_file_pointer.close()
+
+    que = ""
+
+    question_file_addr = dir_head.strip("\n") + i.strip("\n") + ".questions"
+    question_file_pointer = open(question_file_addr, "r")
+    qid_list = []
+    que_list = []
+    for f in question_file_pointer:
+
+        if f.split(':')[0] == "QuestionID":
+            qid_list.append(f.strip('\n'))
+
+        if f.split(':')[0] == "Question":
+            que_sen = f.strip('\n').split(':')[1]
+            que_list.append(que_sen)
+            find_morphological_root(que_sen)
+
+    root_finding = root_match(que_list, sentences)
+
+    answer_root_and_word_match = [0 for i in range(len(que_list))]
+
+    word_match_quarc_score = [0 for i in range(len(que_list))]
+
+    for j in range(len(que_list)):
+        root_match_score = root_finding[j]
+
+        word_match_quarc_score[j] = word_match_quarc(que_list[j], sentences, root_match_score)
+
+        ques_type = find_ques_class(que_list[j])
+
+        answer = question_rules_score(que_list[j], ques_type, sentences, word_match_quarc_score[j])
+
+        answer_w_ner = find_ner(ques_type, answer)
+
+        final_answer = str(' '.join(answer_w_ner)).replace('\n', ' ')
+
+        write_to_file(response_file_pointer, qid_list[j], final_answer)
+
+    question_file_pointer.close()
+
+
+def score_why(sentence):
+    score = 0
+    if 'want' in sentence:
+        score += constant.GOOD_CLUE
+    if 'so' in sentence or 'because' in sentence:
+        score += constant.GOOD_CLUE
+
+    return score
