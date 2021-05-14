@@ -6,8 +6,6 @@ How to run?
 - run the program using `python3 QA inputfile`
 - the program creates the response file in the directory whose path is given in the inputfile
 
-We tested our program on CADE machine lab1-10.
-We frequently ran out of disc space that was alloted to our individual machines and had to delete most of the stuff.
 
 a) For reference, following are the packages that are required. <br/>
 pip install -U spacy <br/>
